@@ -2,11 +2,13 @@ package game
 
 import (
 	"fmt"
+	"image"
 	"image/color"
-	
+
+	"pybot-simulator/config"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"pybot-simulator/config"
 )
 
 func (g *Game) Draw(screen *ebiten.Image) {
@@ -35,16 +37,70 @@ func (g *Game) DrawPlayArea(screen *ebiten.Image) {
 
 func (g *Game) DrawRobot(screen *ebiten.Image) {
 	pos := g.robot.Position
+	vel := g.robot.Velocity
 	
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(-config.RobotSize/2, -config.RobotSize/2)
-	op.GeoM.Translate(pos.X, pos.Y)
+	// // Debug: imprimir velocidad
+	// fmt.Printf("DrawRobot - Vel X: %.2f, Y: %.2f\n", vel.X, vel.Y)
 	
-	if g.robot.Sprite != nil {
-		screen.DrawImage(g.robot.Sprite, op)
+	// Seleccionar el sprite correcto según el movimiento
+	var spriteName string
+	
+	if vel.X == 0 && vel.Y == 0 {
+		spriteName = "idle"
+	} else {
+		// Priorizar dirección horizontal sobre vertical
+		if vel.X < -0.1 {
+			spriteName = "left"
+		} else if vel.X > 0.1 {
+			spriteName = "right"
+		} else if vel.Y < 0 {
+			spriteName = "up"
+		} else {
+			spriteName = "idle"
+		}
 	}
 	
-	ebitenutil.DrawCircle(screen, pos.X, pos.Y, 4, color.RGBA{255, 255, 255, 255})
+	// fmt.Printf("Sprite seleccionado: %s\n", spriteName)
+	
+	currentSprite := g.robot.Sprites[spriteName]
+	
+	// Si el sprite no existe, usar idle como fallback
+	if currentSprite == nil {
+		fmt.Printf("Sprite %s no encontrado, usando idle\n", spriteName)
+		currentSprite = g.robot.Sprites["idle"]
+	}
+	
+	// Si aún no hay sprite, no dibujar nada
+	if currentSprite == nil {
+		fmt.Println("No hay sprite idle, no se puede dibujar")
+		return
+	}
+	
+	// Calcular el frame actual de la animación (4 frames por sprite)
+	frameWidth := 75.0 // 300px / 4 frames = 75px por frame
+	frameHeight := 75.0
+	
+	// Animar solo cuando se está moviendo
+	frameIndex := 0
+	if vel.X != 0 || vel.Y != 0 {
+		// Ciclar entre frames 0, 1, 2, 3 basado en el tiempo
+		frameIndex = (g.animationCounter / 8) % 4 // Cambia de frame cada 8 ticks
+	}
+	
+	// Crear subimagen del frame actual
+	sx := float64(frameIndex) * frameWidth
+	frameRect := image.Rect(int(sx), 0, int(sx+frameWidth), int(frameHeight))
+	frameImg := currentSprite.SubImage(frameRect).(*ebiten.Image)
+	
+	// Dibujar el frame centrado en la posición del robot
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(-frameWidth/2, -frameHeight/2)
+	op.GeoM.Translate(pos.X, pos.Y)
+	
+	screen.DrawImage(frameImg, op)
+	
+	// Punto central para debug
+	ebitenutil.DrawCircle(screen, pos.X, pos.Y, 2, color.RGBA{255, 0, 0, 200})
 }
 
 func (g *Game) DrawCans(screen *ebiten.Image) {

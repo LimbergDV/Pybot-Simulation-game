@@ -2,11 +2,13 @@ package game
 
 import (
 	"fmt"
-	"image/color"
+	"log"
 	"math/rand"
 	"time"
+	"image/color"
 	
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"pybot-simulator/config"
 	"pybot-simulator/entities"
 )
@@ -20,10 +22,10 @@ type Game struct {
 	
 	spawnButton Button
 	
-	robotSprite *ebiten.Image
-	canSprite   *ebiten.Image
+	canSprite *ebiten.Image
 	
-	rng *rand.Rand
+	rng              *rand.Rand
+	animationCounter int
 }
 
 type Button struct {
@@ -33,21 +35,22 @@ type Button struct {
 
 func NewGame(width, height int) *Game {
 	g := &Game{
-		width:  width,
-		height: height,
-		cans:   make([]*entities.Can, 0),
-		rng:    rand.New(rand.NewSource(time.Now().UnixNano())),
+		width:            width,
+		height:           height,
+		cans:             make([]*entities.Can, 0),
+		rng:              rand.New(rand.NewSource(time.Now().UnixNano())),
+		animationCounter: 0,
 	}
 	
-	// Cargar sprites
-	g.LoadAssets()
-	
-	// Crear robot en el centro
+	// Crear robot en el centro (sin sprite todavía)
 	g.robot = entities.NewRobot(
 		float64(width)/2,
 		float64(height)/2,
-		g.robotSprite,
+		nil, // El sprite se cargará después
 	)
+	
+	// Cargar sprites
+	g.LoadAssets()
 	
 	// Crear botón
 	g.spawnButton = Button{
@@ -65,24 +68,56 @@ func NewGame(width, height int) *Game {
 }
 
 func (g *Game) LoadAssets() {
-	// implementación de carga de imágenes desde archivos, no sé si esté bien, falta checar eso:
+	// Cargar sprites del robot
+	g.loadRobotSprites()
 	
-	// var err error
-	// g.robotSprite, _, err = ebitenutil.NewImageFromFile("assets/robot.png")
-	// if err != nil {
-	//     log.Printf("No se pudo cargar robot.png: %v", err)
-	// }
-	// g.canSprite, _, err = ebitenutil.NewImageFromFile("assets/can.png")
-	// if err != nil {
-	//     log.Printf("No se pudo cargar can.png: %v", err)
-	// }
+	// Cargar sprite de la lata
+	var err error
+	g.canSprite, _, err = ebitenutil.NewImageFromFile("assets/can.png")
+	if err != nil {
+		log.Printf("No se pudo cargar can.png: %v", err)
+		// Sprite temporal para la lata
+		g.canSprite = ebiten.NewImage(config.CanSize, config.CanSize)
+		g.canSprite.Fill(color.RGBA{255, 200, 50, 255})
+	}
+}
+
+func (g *Game) loadRobotSprites() {
+	sprites := make(map[string]*ebiten.Image)
 	
-	// Sprites temporales
-	g.robotSprite = ebiten.NewImage(config.RobotSize, config.RobotSize)
-	g.robotSprite.Fill(color.RGBA{100, 150, 255, 255})
+	// Cargar cada sprite del robot
+	spriteFiles := map[string]string{
+		"idle":  "assets/pybot-moves/pybot_idle.png",
+		"up":    "assets/pybot-moves/pybot_walk_up.png",
+		"left":  "assets/pybot-moves/pybot_walk_left.png",
+		"right": "assets/pybot-moves/pybot_walk_right.png",
+	}
 	
-	g.canSprite = ebiten.NewImage(config.CanSize, config.CanSize)
-	g.canSprite.Fill(color.RGBA{255, 200, 50, 255})
+	allLoaded := true
+	for name, path := range spriteFiles {
+		img, _, err := ebitenutil.NewImageFromFile(path)
+		if err != nil {
+			log.Printf("Error cargando sprite %s: %v", name, err)
+			allLoaded = false
+		} else {
+			sprites[name] = img
+		}
+	}
+	
+	// Si se cargaron los sprites, asignarlos al robot
+	if allLoaded && len(sprites) > 0 {
+		g.robot.Sprites = sprites
+	} else {
+		// Crear sprite temporal si no se pudieron cargar
+		log.Println("Usando sprites temporales para el robot")
+		tempSprite := ebiten.NewImage(config.RobotSize, config.RobotSize)
+		tempSprite.Fill(color.RGBA{100, 150, 255, 255})
+		sprites["idle"] = tempSprite
+		sprites["up"] = tempSprite
+		sprites["left"] = tempSprite
+		sprites["right"] = tempSprite
+		g.robot.Sprites = sprites
+	}
 }
 
 func (g *Game) SpawnCans(count int) {
@@ -127,7 +162,9 @@ func (g *Game) GetActiveCansCount() int {
 }
 
 func (g *Game) Update() error {
+	g.animationCounter++
 	g.HandleInput()
+	g.robot.Update()
 	g.CheckCollisions()
 	return nil
 }

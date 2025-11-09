@@ -1,6 +1,8 @@
 package game
 
 import (
+	"math"
+	
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"pybot-simulator/config"
@@ -24,40 +26,40 @@ func (g *Game) HandleInput() {
 }
 
 func (g *Game) HandleRobotMovement() {
-	robot := g.robot
+	dx, dy := 0.0, 0.0
 	
 	// Movimiento con flechas o WASD
 	if ebiten.IsKeyPressed(ebiten.KeyUp) || ebiten.IsKeyPressed(ebiten.KeyW) {
-		robot.Position.Y -= config.RobotSpeed
+		dy = -1
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyDown) {
-		robot.Position.Y += config.RobotSpeed
+		dy = 1
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyLeft) || ebiten.IsKeyPressed(ebiten.KeyA) {
-		robot.Position.X -= config.RobotSpeed
+		dx = -1
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyRight) || ebiten.IsKeyPressed(ebiten.KeyD) {
-		robot.Position.X += config.RobotSpeed
+		dx = 1
 	}
 	
-	g.ClampRobotPosition()
-}
-
-func (g *Game) ClampRobotPosition() {
+	// Normalizar el vector de dirección para movimiento diagonal
+	if dx != 0 || dy != 0 {
+		length := math.Sqrt(dx*dx + dy*dy)
+		dx /= length
+		dy /= length
+	}
+	
+	// Establecer velocidad
+	g.robot.SetVelocity(dx*config.RobotSpeed, dy*config.RobotSpeed)
+	
+	// Establecer límites del área de juego
 	margin := float64(config.GridMargin)
-	
-	if g.robot.Position.X < margin {
-		g.robot.Position.X = margin
-	}
-	if g.robot.Position.X > float64(g.width)-margin {
-		g.robot.Position.X = float64(g.width) - margin
-	}
-	if g.robot.Position.Y < margin {
-		g.robot.Position.Y = margin
-	}
-	if g.robot.Position.Y > float64(g.height)-margin {
-		g.robot.Position.Y = float64(g.height) - margin
-	}
+	g.robot.SetBounds(
+		margin,
+		float64(g.width)-margin,
+		margin,
+		float64(g.height)-margin,
+	)
 }
 
 func (g *Game) IsPointInButton(x, y float64) bool {
