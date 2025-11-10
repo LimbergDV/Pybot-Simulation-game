@@ -85,7 +85,6 @@ func (g *Game) LoadAssets() {
 func (g *Game) loadRobotSprites() {
 	sprites := make(map[string]*ebiten.Image)
 	
-	// Cargar cada sprite del robot
 	spriteFiles := map[string]string{
 		"idle":  "assets/pybot-moves/pybot_idle.png",
 		"up":    "assets/pybot-moves/pybot_walk_up.png",

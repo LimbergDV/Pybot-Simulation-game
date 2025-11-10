@@ -21,7 +21,6 @@ func (g *Game) HandleInput() {
 		}
 	}
 	
-	// Movimiento del robot
 	g.HandleRobotMovement()
 }
 

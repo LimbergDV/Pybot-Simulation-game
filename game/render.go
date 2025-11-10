@@ -38,11 +38,6 @@ func (g *Game) DrawPlayArea(screen *ebiten.Image) {
 func (g *Game) DrawRobot(screen *ebiten.Image) {
 	pos := g.robot.Position
 	vel := g.robot.Velocity
-	
-	// // Debug: imprimir velocidad
-	// fmt.Printf("DrawRobot - Vel X: %.2f, Y: %.2f\n", vel.X, vel.Y)
-	
-	// Seleccionar el sprite correcto según el movimiento
 	var spriteName string
 	
 	if vel.X == 0 && vel.Y == 0 {
@@ -59,9 +54,7 @@ func (g *Game) DrawRobot(screen *ebiten.Image) {
 			spriteName = "idle"
 		}
 	}
-	
-	// fmt.Printf("Sprite seleccionado: %s\n", spriteName)
-	
+		
 	currentSprite := g.robot.Sprites[spriteName]
 	
 	// Si el sprite no existe, usar idle como fallback
@@ -77,7 +70,7 @@ func (g *Game) DrawRobot(screen *ebiten.Image) {
 	}
 	
 	// Calcular el frame actual de la animación (4 frames por sprite)
-	frameWidth := 75.0 // 300px / 4 frames = 75px por frame
+	frameWidth := 75.0
 	frameHeight := 75.0
 	
 	// Animar solo cuando se está moviendo
@@ -98,8 +91,6 @@ func (g *Game) DrawRobot(screen *ebiten.Image) {
 	op.GeoM.Translate(pos.X, pos.Y)
 	
 	screen.DrawImage(frameImg, op)
-	
-	// Punto central para debug
 	ebitenutil.DrawCircle(screen, pos.X, pos.Y, 2, color.RGBA{255, 0, 0, 200})
 }
 
