@@ -16,7 +16,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	g.DrawPlayArea(screen)
 	g.DrawCans(screen)
 	g.DrawRobot(screen)
-	g.DrawButton(screen)
+	g.DrawBattery(screen)
+	g.DrawButtons(screen)
 	g.DrawInfo(screen)
 }
 
@@ -38,6 +39,8 @@ func (g *Game) DrawPlayArea(screen *ebiten.Image) {
 func (g *Game) DrawRobot(screen *ebiten.Image) {
 	pos := g.robot.Position
 	vel := g.robot.Velocity
+	
+	// Seleccionar el sprite correcto según el movimiento
 	var spriteName string
 	
 	if vel.X == 0 && vel.Y == 0 {
@@ -54,23 +57,21 @@ func (g *Game) DrawRobot(screen *ebiten.Image) {
 			spriteName = "idle"
 		}
 	}
-		
+	
 	currentSprite := g.robot.Sprites[spriteName]
 	
 	// Si el sprite no existe, usar idle como fallback
 	if currentSprite == nil {
-		fmt.Printf("Sprite %s no encontrado, usando idle\n", spriteName)
 		currentSprite = g.robot.Sprites["idle"]
 	}
 	
 	// Si aún no hay sprite, no dibujar nada
 	if currentSprite == nil {
-		fmt.Println("No hay sprite idle, no se puede dibujar")
 		return
 	}
 	
 	// Calcular el frame actual de la animación (4 frames por sprite)
-	frameWidth := 75.0
+	frameWidth := 75.0 // 300px / 4 frames = 75px por frame
 	frameHeight := 75.0
 	
 	// Animar solo cuando se está moviendo
@@ -91,7 +92,51 @@ func (g *Game) DrawRobot(screen *ebiten.Image) {
 	op.GeoM.Translate(pos.X, pos.Y)
 	
 	screen.DrawImage(frameImg, op)
-	ebitenutil.DrawCircle(screen, pos.X, pos.Y, 2, color.RGBA{255, 0, 0, 200})
+}
+
+func (g *Game) DrawBattery(screen *ebiten.Image) {
+	// Posición de la batería (esquina superior derecha)
+	batteryX := float64(g.width) - 130.0
+	batteryY := 10.0
+	
+	if g.robot.BatterySprite == nil {
+		// Dibujar batería simple si no hay sprite
+		batteryLevel := g.robot.GetBatteryLevel()
+		for i := 0; i < 4; i++ {
+			barColor := color.RGBA{50, 50, 50, 255}
+			if i < batteryLevel {
+				if batteryLevel <= 1 {
+					barColor = color.RGBA{255, 50, 50, 255} // Rojo
+				} else if batteryLevel == 2 {
+					barColor = color.RGBA{255, 200, 50, 255} // Amarillo
+				} else {
+					barColor = color.RGBA{50, 255, 50, 255} // Verde
+				}
+			}
+			ebitenutil.DrawRect(screen, batteryX+float64(i*27), batteryY, 22, 20, barColor)
+		}
+	} else {
+		// Dibujar sprite de batería
+		batteryLevel := g.robot.GetBatteryLevel()
+		if batteryLevel > 0 {
+			// Asumiendo que el sprite tiene 4 frames de batería
+			frameWidth := float64(g.robot.BatterySprite.Bounds().Dx()) / 4.0
+			frameHeight := float64(g.robot.BatterySprite.Bounds().Dy())
+			
+			frameIndex := batteryLevel - 1 // 0-3
+			sx := float64(frameIndex) * frameWidth
+			frameRect := image.Rect(int(sx), 0, int(sx+frameWidth), int(frameHeight))
+			frameImg := g.robot.BatterySprite.SubImage(frameRect).(*ebiten.Image)
+			
+			op := &ebiten.DrawImageOptions{}
+			op.GeoM.Translate(batteryX, batteryY)
+			screen.DrawImage(frameImg, op)
+		}
+	}
+	
+	// Texto de batería
+	batteryText := fmt.Sprintf("%.0f%%", (g.robot.Battery/g.robot.MaxBattery)*100)
+	ebitenutil.DebugPrintAt(screen, batteryText, int(batteryX+35), int(batteryY+25))
 }
 
 func (g *Game) DrawCans(screen *ebiten.Image) {
@@ -111,9 +156,12 @@ func (g *Game) DrawCans(screen *ebiten.Image) {
 	}
 }
 
-func (g *Game) DrawButton(screen *ebiten.Image) {
-	btn := g.spawnButton
-	
+func (g *Game) DrawButtons(screen *ebiten.Image) {
+	g.DrawButton(screen, g.spawnButton)
+	g.DrawButton(screen, g.rechargeButton)
+}
+
+func (g *Game) DrawButton(screen *ebiten.Image, btn Button) {
 	ebitenutil.DrawRect(screen, btn.X, btn.Y, btn.Width, btn.Height,
 		color.RGBA{70, 130, 180, 255})
 	
@@ -128,10 +176,17 @@ func (g *Game) DrawButton(screen *ebiten.Image) {
 func (g *Game) DrawInfo(screen *ebiten.Image) {
 	activeCans := g.GetActiveCansCount()
 	
-	info := fmt.Sprintf("Recolectadas: %d | Activas: %d | FPS: %.1f",
-		g.robot.CansCollected, activeCans, ebiten.ActualTPS())
+	info := fmt.Sprintf("Recolectadas: %d | Activas: %d",
+		g.robot.CansCollected, activeCans)
 	ebitenutil.DebugPrintAt(screen, info, 10, 10)
 	
-	controls := "Controles: Flechas o WASD para mover | S para spawn latas"
-	ebitenutil.DebugPrintAt(screen, controls, 10, 30)
+	status := "Estado: Buscando latas"
+	if g.robot.Battery <= 0 {
+		status = "Estado: SIN BATERÍA"
+	} else if g.robot.Target != nil {
+		status = "Estado: Recolectando"
+	} else if activeCans == 0 {
+		status = "Estado: Esperando latas"
+	}
+	ebitenutil.DebugPrintAt(screen, status, 10, 30)
 }

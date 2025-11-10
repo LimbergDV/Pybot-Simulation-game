@@ -2,10 +2,11 @@ package game
 
 import (
 	"fmt"
+	"image/color"
 	"log"
+	"math"
 	"math/rand"
 	"time"
-	"image/color"
 	
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -20,7 +21,8 @@ type Game struct {
 	robot *entities.Robot
 	cans  []*entities.Can
 	
-	spawnButton Button
+	spawnButton    Button
+	rechargeButton Button
 	
 	canSprite *ebiten.Image
 	
@@ -46,19 +48,36 @@ func NewGame(width, height int) *Game {
 	g.robot = entities.NewRobot(
 		float64(width)/2,
 		float64(height)/2,
-		nil, // El sprite se cargará después
+		nil,
+	)
+	
+	// Establecer límites del robot
+	margin := float64(config.GridMargin)
+	g.robot.SetBounds(
+		margin,
+		float64(width)-margin,
+		margin,
+		float64(height)-margin,
 	)
 	
 	// Cargar sprites
 	g.LoadAssets()
 	
-	// Crear botón
+	// Crear botones
 	g.spawnButton = Button{
 		X:      20,
-		Y:      float64(height - 60),
-		Width:  160,
+		Y:      float64(height - 110),
+		Width:  180,
 		Height: 40,
 		Text:   "Spawn Latas (S)",
+	}
+	
+	g.rechargeButton = Button{
+		X:      20,
+		Y:      float64(height - 60),
+		Width:  180,
+		Height: 40,
+		Text:   "Recargar (R)",
 	}
 	
 	// Spawn inicial
@@ -70,6 +89,9 @@ func NewGame(width, height int) *Game {
 func (g *Game) LoadAssets() {
 	// Cargar sprites del robot
 	g.loadRobotSprites()
+	
+	// Cargar sprite de batería
+	g.loadBatterySprite()
 	
 	// Cargar sprite de la lata
 	var err error
@@ -103,11 +125,9 @@ func (g *Game) loadRobotSprites() {
 		}
 	}
 	
-	// Si se cargaron los sprites, asignarlos al robot
 	if allLoaded && len(sprites) > 0 {
 		g.robot.Sprites = sprites
 	} else {
-		// Crear sprite temporal si no se pudieron cargar
 		log.Println("Usando sprites temporales para el robot")
 		tempSprite := ebiten.NewImage(config.RobotSize, config.RobotSize)
 		tempSprite.Fill(color.RGBA{100, 150, 255, 255})
@@ -116,6 +136,18 @@ func (g *Game) loadRobotSprites() {
 		sprites["left"] = tempSprite
 		sprites["right"] = tempSprite
 		g.robot.Sprites = sprites
+	}
+}
+
+func (g *Game) loadBatterySprite() {
+	img, _, err := ebitenutil.NewImageFromFile("assets/energy-buttons/battery_indicator.png")
+	if err != nil {
+		log.Printf("No se pudo cargar battery.png: %v", err)
+		// Sprite temporal
+		g.robot.BatterySprite = ebiten.NewImage(100, 25)
+		g.robot.BatterySprite.Fill(color.RGBA{0, 255, 0, 255})
+	} else {
+		g.robot.BatterySprite = img
 	}
 }
 
@@ -129,6 +161,25 @@ func (g *Game) SpawnCans(count int) {
 		can := entities.NewCan(x, y, g.canSprite)
 		g.cans = append(g.cans, can)
 	}
+}
+
+func (g *Game) FindNearestCan() *entities.Can {
+	var nearest *entities.Can
+	minDistance := math.MaxFloat64
+	
+	for _, can := range g.cans {
+		if !can.Active {
+			continue
+		}
+		
+		distance := g.robot.Position.Distance(can.Position)
+		if distance < minDistance {
+			minDistance = distance
+			nearest = can
+		}
+	}
+	
+	return nearest
 }
 
 func (g *Game) CheckCollisions() {
@@ -163,6 +214,15 @@ func (g *Game) GetActiveCansCount() int {
 func (g *Game) Update() error {
 	g.animationCounter++
 	g.HandleInput()
+	
+	// Si el robot no tiene objetivo y tiene batería, buscar la lata más cercana
+	if g.robot.Target == nil && g.robot.Battery > 0 {
+		nearest := g.FindNearestCan()
+		if nearest != nil {
+			g.robot.SetTarget(nearest.Position)
+		}
+	}
+	
 	g.robot.Update()
 	g.CheckCollisions()
 	return nil
@@ -170,4 +230,9 @@ func (g *Game) Update() error {
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return g.width, g.height
+}
+
+func (g *Game) IsPointInButton(btn Button, x, y float64) bool {
+	return x >= btn.X && x <= btn.X+btn.Width &&
+		y >= btn.Y && y <= btn.Y+btn.Height
 }
